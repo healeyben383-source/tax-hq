@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/data-table";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { daysUntil, formatDate, formatMoney } from "@/lib/format";
-import type { Currency } from "@/lib/types";
 import {
   createRecurringSubscriptionAction,
   updateRecurringSubscriptionAction,
@@ -255,8 +254,8 @@ export default async function RecurringPage({
                     className={viewArchived ? "opacity-70" : undefined}
                   >
                     <TD>{s.provider?.name ?? "—"}</TD>
-                    <TD className="text-right tabular-nums">
-                      {formatMoney(Number(s.amount), s.currency as Currency)}
+                    <TD className="text-right tabular-nums whitespace-nowrap">
+                      {formatSubscriptionAmount(Number(s.amount), s.currency)}
                     </TD>
                     <TD className="capitalize text-subtle">{s.cadence}</TD>
                     <TD className="text-subtle whitespace-nowrap">
@@ -295,6 +294,27 @@ export default async function RecurringPage({
       </Card>
     </>
   );
+}
+
+// Always prefix with the explicit currency code so AUD doesn't collapse to
+// "$29.99" under the en-AU locale (which is what Intl currency formatting
+// would do otherwise). For USD we also append a rough AUD equivalent using
+// the same flat 1.56 multiplier the page header already relies on, since no
+// real FX layer exists yet.
+function formatSubscriptionAmount(amount: number, currency: string): string {
+  const number = new Intl.NumberFormat("en-AU", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+  const primary = `${currency} ${number}`;
+  if (currency === "USD") {
+    const aud = new Intl.NumberFormat("en-AU", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount * 1.56);
+    return `${primary} (~AUD ${aud})`;
+  }
+  return primary;
 }
 
 function renderDaysBadge(active: boolean, days: number) {

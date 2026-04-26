@@ -4,6 +4,7 @@ export type ProviderCategory =
   | "AI"
   | "Software"
   | "Hosting"
+  | "Domains"
   | "Payments"
   | "Finance"
   | "Other";

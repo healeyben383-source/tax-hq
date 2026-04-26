@@ -36,6 +36,7 @@ export const providerCategoryOptions: string[] = [
   "AI",
   "Software",
   "Hosting",
+  "Domains",
   "Payments",
   "Finance",
   "Other",
