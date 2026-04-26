@@ -13,7 +13,12 @@ import {
 import { PageHeader } from "@/components/ui/page-header";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { providers } from "@/lib/mock-data";
-import { daysUntil, formatDate, formatMoney, formatMonth } from "@/lib/format";
+import {
+  daysUntil,
+  formatDate,
+  formatMoneyExplicit,
+  formatMonth,
+} from "@/lib/format";
 import { isEffectivelyUnlinkedReceipt } from "@/lib/receipts";
 import type { Currency, FileStatus } from "@/lib/types";
 
@@ -236,7 +241,9 @@ export default async function DashboardPage() {
             <CardStat
               label="This month"
               value={
-                monthExpenseError ? "—" : formatMoney(monthTotalAud, "AUD")
+                monthExpenseError
+                  ? "—"
+                  : formatMoneyExplicit(monthTotalAud, "AUD")
               }
               hint={monthExpenseError ? "Could not load" : "Current month"}
             />
@@ -357,8 +364,11 @@ export default async function DashboardPage() {
                   return (
                     <TR key={r.id}>
                       <TD>{r.provider?.name ?? "—"}</TD>
-                      <TD className="tabular-nums">
-                        {formatMoney(Number(r.amount), r.currency as Currency)}
+                      <TD className="tabular-nums whitespace-nowrap">
+                        {formatMoneyExplicit(
+                          Number(r.amount),
+                          r.currency as Currency,
+                        )}
                       </TD>
                       <TD className="text-subtle whitespace-nowrap">
                         {formatDate(r.next_renewal_on)}
@@ -417,8 +427,8 @@ export default async function DashboardPage() {
                 missingInvoiceRows.map((e) => (
                   <TR key={e.id}>
                     <TD>{e.provider?.name ?? "—"}</TD>
-                    <TD className="text-right tabular-nums">
-                      {formatMoney(Number(e.aud_amount), "AUD")}
+                    <TD className="text-right tabular-nums whitespace-nowrap">
+                      {formatMoneyExplicit(Number(e.aud_amount), "AUD")}
                     </TD>
                     <TD className="text-subtle">{formatDate(e.spent_on)}</TD>
                     <TD>

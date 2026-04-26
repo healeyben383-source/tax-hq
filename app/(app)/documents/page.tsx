@@ -9,9 +9,9 @@ import {
   TR,
 } from "@/components/ui/data-table";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { formatDate, formatMonth } from "@/lib/format";
+import { formatDate, formatMoneyExplicit, formatMonth } from "@/lib/format";
 import { isEffectivelyUnlinkedReceipt } from "@/lib/receipts";
-import type { FileStatus } from "@/lib/types";
+import type { Currency, FileStatus } from "@/lib/types";
 import { createDocumentAction, updateDocumentAction } from "./actions";
 import { DocumentForm, type ExpenseOption } from "./document-form";
 import { DocumentRow } from "./document-row";
@@ -191,7 +191,8 @@ export default async function DocumentsPage({
   const expenses = expensesResult.data ?? [];
   const loadError = documentsResult.error;
 
-  // Flat expense options for the form: "{Provider} — {DD Mon} — {Amount} {Currency}".
+  // Flat expense options for the form: "{Provider} — {DD Mon} — {CCY Amount}".
+  // Currency-first to match the rest of the app (formatMoneyExplicit).
   const expenseOptions: ExpenseOption[] = expenses.map((e) => {
     const providerName = e.provider?.name ?? "Unknown";
     const amount = Number(e.amount);
@@ -202,7 +203,7 @@ export default async function DocumentsPage({
     }).format(date);
     return {
       id: e.id,
-      label: `${providerName} — ${shortDate} — ${amount.toFixed(2)} ${e.currency}`,
+      label: `${providerName} — ${shortDate} — ${formatMoneyExplicit(amount, e.currency as Currency)}`,
       provider_id: e.provider_id,
       month: String(date.getMonth() + 1),
       year: String(date.getFullYear()),
@@ -211,6 +212,8 @@ export default async function DocumentsPage({
 
   // Linker labels for the inline picker on unlinked receipt rows. Format:
   // "24 Apr 2026 · OpenAI · USD 20.00", or fallback without provider.
+  // Routed through formatMoneyExplicit so number grouping matches the rest of
+  // the app (e.g. "AUD 1,234.50").
   const linkableExpenses = expenses.map((e) => {
     const date = new Date(e.spent_on);
     const fullDate = new Intl.DateTimeFormat("en-AU", {
@@ -218,7 +221,10 @@ export default async function DocumentsPage({
       month: "short",
       year: "numeric",
     }).format(date);
-    const amountText = `${e.currency} ${Number(e.amount).toFixed(2)}`;
+    const amountText = formatMoneyExplicit(
+      Number(e.amount),
+      e.currency as Currency,
+    );
     const providerName = e.provider?.name;
     return {
       id: e.id,
@@ -494,7 +500,10 @@ function formatPeriod(month: number | null, year: number | null): string {
 
 function formatExpenseLabel(expense: DocumentExpenseEmbed): string | null {
   if (!expense) return null;
-  return `${formatDate(expense.spent_on)} · ${Number(expense.amount).toFixed(2)} ${expense.currency}`;
+  return `${formatDate(expense.spent_on)} · ${formatMoneyExplicit(
+    Number(expense.amount),
+    expense.currency as Currency,
+  )}`;
 }
 
 function FilterTab({

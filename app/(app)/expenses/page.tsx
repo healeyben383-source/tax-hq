@@ -11,7 +11,7 @@ import {
   TR,
 } from "@/components/ui/data-table";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoneyExplicit } from "@/lib/format";
 import type { Currency } from "@/lib/types";
 import { createExpenseAction, updateExpenseAction } from "./actions";
 import {
@@ -149,7 +149,7 @@ export default async function ExpensesPage({
           <p className="text-sm text-subtle mt-1">
             {viewArchived
               ? `Showing archived expenses · ${expenses.length} item${expenses.length === 1 ? "" : "s"}.`
-              : `${expenses.length} item${expenses.length === 1 ? "" : "s"} · ${formatMoney(totalAud, "AUD")} total (AUD equivalent).`}
+              : `${expenses.length} item${expenses.length === 1 ? "" : "s"} · ${formatMoneyExplicit(totalAud, "AUD")} total (AUD equivalent).`}
           </p>
         </div>
         <div className="shrink-0 flex items-center gap-3">
@@ -247,11 +247,11 @@ export default async function ExpensesPage({
                   <TD>
                     <Badge tone="neutral">{e.category}</Badge>
                   </TD>
-                  <TD className="text-right tabular-nums">
-                    {formatMoney(Number(e.amount), e.currency as Currency)}
+                  <TD className="text-right tabular-nums whitespace-nowrap">
+                    {formatMoneyExplicit(Number(e.amount), e.currency as Currency)}
                   </TD>
-                  <TD className="text-right tabular-nums">
-                    {formatMoney(Number(e.aud_amount), "AUD")}
+                  <TD className="text-right tabular-nums whitespace-nowrap">
+                    {formatMoneyExplicit(Number(e.aud_amount), "AUD")}
                   </TD>
                   <TD>
                     <Badge tone={e.deductible ? "success" : "muted"}>

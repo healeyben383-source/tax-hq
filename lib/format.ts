@@ -8,6 +8,23 @@ export function formatMoney(amount: number, currency: Currency = "AUD"): string 
   }).format(amount);
 }
 
+// Always renders "{CCY} {amount}" — never relies on locale currency symbols
+// to disambiguate. Use for any user-facing money display where the source
+// currency matters (table cells, stat values, list rows, header summaries).
+// Note: prefer this over formatMoney for new code. formatMoney's en-AU
+// locale renders AUD as "$29.99" but USD as "USD 31.90", which mixes formats
+// and creates ambiguity.
+export function formatMoneyExplicit(
+  amount: number,
+  currency: Currency = "AUD",
+): string {
+  const formatted = new Intl.NumberFormat("en-AU", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+  return `${currency} ${formatted}`;
+}
+
 export function formatDate(iso: string): string {
   return new Intl.DateTimeFormat("en-AU", {
     day: "2-digit",

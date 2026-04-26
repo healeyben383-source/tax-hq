@@ -11,7 +11,8 @@ import {
   TR,
 } from "@/components/ui/data-table";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { daysUntil, formatDate, formatMoney } from "@/lib/format";
+import { daysUntil, formatDate, formatMoneyExplicit } from "@/lib/format";
+import type { Currency } from "@/lib/types";
 import {
   createRecurringSubscriptionAction,
   updateRecurringSubscriptionAction,
@@ -160,7 +161,7 @@ export default async function RecurringPage({
           <p className="text-sm text-subtle mt-1">
             {viewArchived
               ? `Showing archived subscriptions · ${subscriptions.length} item${subscriptions.length === 1 ? "" : "s"}.`
-              : `Active subscriptions · ~${formatMoney(monthlyEquivAud, "AUD")} monthly equivalent.`}
+              : `Active subscriptions · ~${formatMoneyExplicit(monthlyEquivAud, "AUD")} monthly equivalent.`}
           </p>
         </div>
         <div className="shrink-0 flex items-center gap-3">
@@ -296,23 +297,14 @@ export default async function RecurringPage({
   );
 }
 
-// Always prefix with the explicit currency code so AUD doesn't collapse to
-// "$29.99" under the en-AU locale (which is what Intl currency formatting
-// would do otherwise). For USD we also append a rough AUD equivalent using
-// the same flat 1.56 multiplier the page header already relies on, since no
-// real FX layer exists yet.
+// Renders the source-currency amount via the shared explicit-currency
+// formatter, then for USD also appends a rough AUD equivalent using the same
+// flat 1.56 multiplier the page header already relies on (no real FX layer
+// yet).
 function formatSubscriptionAmount(amount: number, currency: string): string {
-  const number = new Intl.NumberFormat("en-AU", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
-  const primary = `${currency} ${number}`;
+  const primary = formatMoneyExplicit(amount, currency as Currency);
   if (currency === "USD") {
-    const aud = new Intl.NumberFormat("en-AU", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount * 1.56);
-    return `${primary} (~AUD ${aud})`;
+    return `${primary} (~${formatMoneyExplicit(amount * 1.56, "AUD")})`;
   }
   return primary;
 }
