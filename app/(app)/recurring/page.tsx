@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/data-table";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { daysUntil, formatDate, formatMoneyExplicit } from "@/lib/format";
+import { DEFAULT_USD_TO_AUD_RATE, estimateAudAmount } from "@/lib/fx";
 import type { Currency } from "@/lib/types";
 import {
   createRecurringSubscriptionAction,
@@ -140,16 +141,15 @@ export default async function RecurringPage({
 
   const showAnyForm = showAdd || editRequested;
 
-  // Header summary: rough monthly spend across active subscriptions.
-  // Mirrors the previous mock display; uses a flat 1.56 USD→AUD multiplier
-  // for non-AUD lines because no FX layer exists yet.
+  // Header summary: rough monthly spend across active subscriptions. FX
+  // estimation lives in lib/fx.ts so the placeholder rate isn't duplicated.
   const now = new Date();
   const monthlyEquivAud = subscriptions
     .filter((s) => s.active && s.cadence === "monthly")
-    .reduce((sum, s) => {
-      const amt = Number(s.amount);
-      return sum + (s.currency === "AUD" ? amt : amt * 1.56);
-    }, 0);
+    .reduce(
+      (sum, s) => sum + estimateAudAmount(Number(s.amount), s.currency),
+      0,
+    );
 
   return (
     <>
@@ -298,13 +298,16 @@ export default async function RecurringPage({
 }
 
 // Renders the source-currency amount via the shared explicit-currency
-// formatter, then for USD also appends a rough AUD equivalent using the same
-// flat 1.56 multiplier the page header already relies on (no real FX layer
-// yet).
+// formatter, then for USD also appends a rough AUD equivalent using the
+// shared placeholder rate from lib/fx.ts.
 function formatSubscriptionAmount(amount: number, currency: string): string {
   const primary = formatMoneyExplicit(amount, currency as Currency);
   if (currency === "USD") {
-    return `${primary} (~${formatMoneyExplicit(amount * 1.56, "AUD")})`;
+    const aud = formatMoneyExplicit(
+      amount * DEFAULT_USD_TO_AUD_RATE,
+      "AUD",
+    );
+    return `${primary} (~${aud})`;
   }
   return primary;
 }

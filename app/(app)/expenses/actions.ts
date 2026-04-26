@@ -20,6 +20,20 @@ type ServerSupabase = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
 type ParsedNumbers = { amount: number; audAmount: number };
 
+// Mirror of the `?invoice=…` allowlist on the Expenses page. Kept here so
+// updateExpenseAction can validate the hidden return-to hint before building
+// a redirect URL (avoids open-redirect / arbitrary-path risk). Only one
+// value today, but a Set leaves room to grow without a code shape change.
+const allowedReturnToInvoices = new Set(["missing"]);
+
+function readReturnToInvoiceRedirect(formData: FormData): string {
+  const raw = String(formData.get("return_to_invoice") ?? "").trim();
+  if (raw && allowedReturnToInvoices.has(raw)) {
+    return `/expenses?invoice=${raw}&saved=1`;
+  }
+  return "/expenses?saved=1";
+}
+
 function readValues(formData: FormData): CreateExpenseValues {
   return {
     provider_id: String(formData.get("provider_id") ?? "").trim(),
@@ -208,7 +222,11 @@ export async function updateExpenseAction(
   }
 
   revalidatePath("/expenses");
-  redirect("/expenses");
+  // Preserve the missing-invoice filter when the form was opened from it.
+  // Unknown / missing return_to_invoice falls through to the unfiltered
+  // default. Add flow is unchanged — createExpenseAction below still
+  // redirects to plain /expenses.
+  redirect(readReturnToInvoiceRedirect(formData));
 }
 
 // Direct form-action signature — invoked from the per-row Delete button.

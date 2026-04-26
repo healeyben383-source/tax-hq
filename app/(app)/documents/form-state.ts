@@ -13,6 +13,10 @@ export type CreateDocumentValues = {
   tax_year_start: string; // "YYYY" (required)
   is_private: boolean;
   notes: string;
+  // Optional document amount. Not stored on the row — used only by
+  // findLikelyExpenseForDocument to refine auto-matching during create.
+  // Persisted on form-state so a validation error round-trip preserves it.
+  amount: string;
 };
 
 export type CreateDocumentState = {
@@ -40,6 +44,7 @@ export const emptyDocumentValues: CreateDocumentValues = {
   tax_year_start: "", // page.tsx fills this with the current FY at render time
   is_private: false,
   notes: "",
+  amount: "",
 };
 
 export const initialCreateDocumentState: CreateDocumentState = {

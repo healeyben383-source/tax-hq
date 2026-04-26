@@ -6,6 +6,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { findLikelyExpenseForDocument } from "@/lib/document-matching";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   documentFileStatusOptions,
@@ -52,7 +53,27 @@ function readValues(formData: FormData): CreateDocumentValues {
     tax_year_start: String(formData.get("tax_year_start") ?? "").trim(),
     is_private: formData.get("is_private") === "1",
     notes: String(formData.get("notes") ?? "").trim(),
+    amount: String(formData.get("amount") ?? "").trim(),
   };
+}
+
+// Optional. Returns a positive number, or null if unset, or an error string
+// if the user entered something that isn't a valid positive number. Kept
+// separate from validateValues because amount is purely a matching hint —
+// nothing on the row depends on it, so a parse failure is a soft error
+// surfaced inline rather than blocking insert.
+function parseOptionalAmount(
+  raw: string,
+): { error: string | null; value: number | null } {
+  if (!raw) return { error: null, value: null };
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) {
+    return {
+      error: "Document amount must be a positive number.",
+      value: null,
+    };
+  }
+  return { error: null, value: n };
 }
 
 function validateValues(values: CreateDocumentValues): {
@@ -284,13 +305,37 @@ export async function createDocumentAction(
     if (expenseError) return { error: expenseError, values };
   }
 
+  // Optional document amount — refines the auto-matcher when present.
+  // Validation lives next to the read (parse-don't-validate style); a parse
+  // error is surfaced inline like other field-level errors.
+  const parsedAmount = parseOptionalAmount(values.amount);
+  if (parsedAmount.error) return { error: parsedAmount.error, values };
+
+  // Auto-match: only when the user did not pick an expense AND we have
+  // enough info (provider + month + year) to look one up. Manual selection
+  // is always respected — never overwritten. Helper is fail-silent: any
+  // error returns null and we proceed unlinked.
+  let autoMatchedExpenseId: string | null = null;
+  if (!values.expense_id && doc_month !== null && doc_year !== null) {
+    const candidate = await findLikelyExpenseForDocument({
+      supabase,
+      ownerId: user.id,
+      providerId: values.provider_id,
+      docMonth: doc_month,
+      docYear: doc_year,
+      amount: parsedAmount.value ?? undefined,
+    });
+    if (candidate) autoMatchedExpenseId = candidate.id;
+  }
+  const effectiveExpenseId = values.expense_id || autoMatchedExpenseId || null;
+
   const { data: inserted, error } = await supabase
     .from("documents")
     .insert({
       // owner_id is authoritative — never from the form.
       owner_id: user.id,
       provider_id: values.provider_id,
-      expense_id: values.expense_id || null,
+      expense_id: effectiveExpenseId,
       title: values.title,
       type: values.type,
       file_status: values.file_status,
@@ -300,6 +345,7 @@ export async function createDocumentAction(
       is_private: values.is_private,
       created_via: "manual",
       notes: values.notes || null,
+      amount: parsedAmount.value,
       // storage_* fields stay NULL until the file upload below succeeds.
     })
     .select("id")
@@ -346,11 +392,21 @@ export async function createDocumentAction(
   }
 
   if (shouldSyncOnWrite(values.file_status)) {
-    await recomputeInvoiceSaved(supabase, values.expense_id || null);
+    // Use the effective id so an auto-linked expense gets its
+    // invoice_saved flipped to true when this document is "saved".
+    await recomputeInvoiceSaved(supabase, effectiveExpenseId);
   }
 
   revalidatePath("/documents");
-  redirect("/documents?saved=1");
+  // Surface auto-linking as a separate URL flag so the banner can show a
+  // longer message and contextual actions. `doc` carries the freshly-created
+  // document id so the banner can deep-link to its edit URL or post to the
+  // unlink action without an extra round trip.
+  redirect(
+    autoMatchedExpenseId
+      ? `/documents?saved=1&auto_linked=1&doc=${documentId}`
+      : "/documents?saved=1",
+  );
 }
 
 export async function updateDocumentAction(
@@ -367,6 +423,11 @@ export async function updateDocumentAction(
     return { error: v.error ?? "Invalid values.", values };
   }
   const { doc_month, doc_year, tax_year_start } = v.parsed;
+
+  // Same parse rules as create — blank is a real value (clears the column),
+  // a non-positive number surfaces as an inline error.
+  const parsedAmount = parseOptionalAmount(values.amount);
+  if (parsedAmount.error) return { error: parsedAmount.error, values };
 
   const supabase = await createSupabaseServerClient();
   const {
@@ -413,6 +474,7 @@ export async function updateDocumentAction(
       tax_year_start,
       is_private: values.is_private,
       notes: values.notes || null,
+      amount: parsedAmount.value,
       // owner_id, created_via, storage_* deliberately omitted — immutable here.
     })
     .eq("id", id)
@@ -554,6 +616,68 @@ export async function deleteDocumentAction(formData: FormData): Promise<void> {
 
   revalidatePath("/documents");
   redirect("/documents");
+}
+
+// Inline unlink action — clears expense_id on a document the user just had
+// auto-linked (and could just as easily have been linked manually). Owner-
+// scoped + RLS-safe, fail-silent. Only fires when the document still has an
+// expense_id; a no-op call (already unlinked, wrong user, deleted) just
+// redirects quietly to the documents list.
+export async function unlinkDocumentExpenseAction(
+  formData: FormData,
+): Promise<void> {
+  const documentId = String(formData.get("document_id") ?? "").trim();
+  const fallback = "/documents";
+  const linkUuidPattern =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!linkUuidPattern.test(documentId)) {
+    redirect(fallback);
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/sign-in");
+  }
+
+  // Read the current expense_id first so the recompute path knows which
+  // expense to refresh after the clear. RLS + explicit owner_id keep this
+  // strictly scoped to the caller.
+  const { data: existing } = await supabase
+    .from("documents")
+    .select("expense_id")
+    .eq("id", documentId)
+    .eq("owner_id", user.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!existing) {
+    redirect(fallback);
+  }
+  const previousExpenseId = (existing as { expense_id: string | null })
+    .expense_id;
+  if (!previousExpenseId) {
+    // Already unlinked — nothing to do. Quiet redirect, no banner change.
+    redirect(fallback);
+  }
+
+  const { error: clearError } = await supabase
+    .from("documents")
+    .update({ expense_id: null })
+    .eq("id", documentId)
+    .eq("owner_id", user.id)
+    .is("deleted_at", null);
+
+  if (!clearError) {
+    // Previously-linked expense may have lost its only saved doc → recompute
+    // invoice_saved so /expenses?invoice=missing reflects today's truth.
+    await recomputeInvoiceSaved(supabase, previousExpenseId);
+  }
+
+  revalidatePath("/documents");
+  revalidatePath("/");
+  redirect("/documents?saved=1");
 }
 
 // Inline link action — wires an effectively-unlinked receipt to one of the

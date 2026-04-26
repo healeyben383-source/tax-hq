@@ -26,6 +26,7 @@ export function ExpenseForm({
   pendingLabel,
   providers,
   expenseId,
+  returnToInvoice,
 }: {
   action: ExpenseFormAction;
   initial: CreateExpenseState;
@@ -33,6 +34,11 @@ export function ExpenseForm({
   pendingLabel: string;
   providers: ProviderOption[];
   expenseId?: string;
+  // When the edit form was opened from a filtered list (e.g. ?invoice=missing),
+  // the parent passes the filter value here so the server action can redirect
+  // back to the same filtered URL on save. Server-side allowlist validates
+  // the value — only "missing" is currently accepted.
+  returnToInvoice?: string;
 }) {
   const [state, formAction, pending] = useActionState<
     CreateExpenseState,
@@ -53,6 +59,13 @@ export function ExpenseForm({
       >
         {expenseId ? (
           <input type="hidden" name="id" value={expenseId} />
+        ) : null}
+        {returnToInvoice ? (
+          <input
+            type="hidden"
+            name="return_to_invoice"
+            value={returnToInvoice}
+          />
         ) : null}
 
         {noProviders ? (

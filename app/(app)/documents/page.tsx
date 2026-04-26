@@ -21,6 +21,7 @@ import {
   initialCreateDocumentState,
   type CreateDocumentState,
 } from "./form-state";
+import { AutoLinkedBanner } from "./auto-linked-banner";
 import { AutoDismissSuccess } from "./success-banner";
 
 type DocumentExpenseEmbed = {
@@ -61,6 +62,7 @@ type DocumentFullRow = {
   is_private: boolean;
   notes: string | null;
   storage_path: string | null;
+  amount: number | string | null;
 };
 
 type ProviderOption = { id: string; name: string };
@@ -100,14 +102,23 @@ export default async function DocumentsPage({
     saved?: string;
     type?: string;
     linked?: string;
+    auto_linked?: string;
+    doc?: string;
   }>;
 }) {
-  const { add, edit, saved, type, linked } = await searchParams;
+  const { add, edit, saved, type, linked, auto_linked, doc } =
+    await searchParams;
 
   const editRequested = typeof edit === "string" && edit.length > 0;
   const editId = editRequested && uuidPattern.test(edit) ? edit : null;
   const showAdd = !editRequested && add === "1";
   const showSaved = saved === "1";
+  const showAutoLinked = auto_linked === "1";
+  // Validate the auto-linked document id at render time so the banner is
+  // only handed a known-good UUID. A tampered/empty value falls through to
+  // the plain saved banner.
+  const autoLinkedDocId =
+    typeof doc === "string" && uuidPattern.test(doc) ? doc : null;
   const showLinked = linked === "1";
   const filterType =
     typeof type === "string" && filterableTypes.has(type) ? type : "";
@@ -240,7 +251,7 @@ export default async function DocumentsPage({
     const { data: targetData } = await supabase
       .from("documents")
       .select(
-        "id, provider_id, expense_id, title, type, file_status, doc_month, doc_year, tax_year_start, is_private, notes, storage_path",
+        "id, provider_id, expense_id, title, type, file_status, doc_month, doc_year, tax_year_start, is_private, notes, storage_path, amount",
       )
       .eq("id", editId)
       .is("deleted_at", null)
@@ -278,6 +289,12 @@ export default async function DocumentsPage({
         tax_year_start: String(editTarget.tax_year_start),
         is_private: editTarget.is_private,
         notes: editTarget.notes ?? "",
+        // numeric(14,2) round-trips as either number or string from PostgREST;
+        // normalise to a string for the form input.
+        amount:
+          editTarget.amount !== null && editTarget.amount !== undefined
+            ? String(editTarget.amount)
+            : "",
       },
     };
   }
@@ -328,7 +345,16 @@ export default async function DocumentsPage({
         </Link>
       </div>
 
-      {showSaved ? <AutoDismissSuccess message="Document saved" /> : null}
+      {showSaved && showAutoLinked && autoLinkedDocId ? (
+        // Auto-link banner has its own URL-flag cleanup (saved + auto_linked
+        // + doc) and a longer dismiss window so the user has time to act.
+        <AutoLinkedBanner documentId={autoLinkedDocId} />
+      ) : showSaved ? (
+        <AutoDismissSuccess
+          message="Document saved"
+          paramKey={["saved", "auto_linked", "doc"]}
+        />
+      ) : null}
       {showLinked ? (
         <AutoDismissSuccess message="Receipt linked" paramKey="linked" />
       ) : null}

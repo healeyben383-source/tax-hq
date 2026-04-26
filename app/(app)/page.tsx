@@ -20,6 +20,7 @@ import {
   formatMonth,
 } from "@/lib/format";
 import { isEffectivelyUnlinkedReceipt } from "@/lib/receipts";
+import { runRecurringExpenseSweep } from "@/lib/recurring-sweep";
 import type { Currency, FileStatus } from "@/lib/types";
 
 type MissingInvoiceRow = {
@@ -102,6 +103,11 @@ function applyUpcomingRenewalFilters<T>(query: T, cutoffIso: string): T {
 // "Missing invoices" card below is wired to Supabase.
 export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient();
+
+  // Materialise any due recurring subscriptions into expense rows before we
+  // run the dashboard's stat / list queries, so the "This month" total and
+  // "Missing invoices" list reflect today's state. Fail-silent internally.
+  await runRecurringExpenseSweep(supabase);
 
   const { data: missingInvoiceData } = await applyMissingInvoiceFilters(
     supabase
@@ -249,23 +255,25 @@ export default async function DashboardPage() {
             />
           </CardBody>
         </Card>
-        <Card>
-          <CardBody>
-            <CardStat
-              label="Missing invoices"
-              value={
-                missingInvoiceCountError ? "—" : String(missingInvoiceCount)
-              }
-              hint={
-                missingInvoiceCountError
-                  ? "Could not load"
-                  : missingInvoiceCount > 0
-                    ? "Follow up required"
-                    : "All filed"
-              }
-            />
-          </CardBody>
-        </Card>
+        <Link href="/expenses?invoice=missing" className="block">
+          <Card className="hover:border-slate-300 transition-colors">
+            <CardBody>
+              <CardStat
+                label="Missing invoices"
+                value={
+                  missingInvoiceCountError ? "—" : String(missingInvoiceCount)
+                }
+                hint={
+                  missingInvoiceCountError
+                    ? "Could not load"
+                    : missingInvoiceCount > 0
+                      ? "Follow up required →"
+                      : "All filed"
+                }
+              />
+            </CardBody>
+          </Card>
+        </Link>
         <Card>
           <CardBody>
             <CardStat

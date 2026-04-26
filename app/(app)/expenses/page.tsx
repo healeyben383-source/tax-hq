@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/data-table";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { formatDate, formatMoneyExplicit } from "@/lib/format";
+import { runRecurringExpenseSweep } from "@/lib/recurring-sweep";
 import type { Currency } from "@/lib/types";
 import { createExpenseAction, updateExpenseAction } from "./actions";
 import {
@@ -60,11 +61,15 @@ export default async function ExpensesPage({
     add?: string;
     edit?: string;
     archived?: string;
+    invoice?: string;
   }>;
 }) {
-  const { add, edit, archived } = await searchParams;
+  const { add, edit, archived, invoice } = await searchParams;
 
   const viewArchived = archived === "1";
+  // Missing-invoice filter only applies on the active view. Archived view
+  // intentionally ignores it — the user is doing a different task there.
+  const showMissingOnly = !viewArchived && invoice === "missing";
   const editRequested =
     !viewArchived && typeof edit === "string" && edit.length > 0;
   const editId = editRequested && uuidPattern.test(edit) ? edit : null;
@@ -72,14 +77,28 @@ export default async function ExpensesPage({
 
   const supabase = await createSupabaseServerClient();
 
+  // Materialise any due recurring subscriptions into expense rows before we
+  // read the list, so newly-created rows show up in this same render. The
+  // sweep is internally fail-silent (try/catch around every step) so it
+  // can't break the page.
+  await runRecurringExpenseSweep(supabase);
+
+  // Const-ternary chains so the Supabase builder type stays stable. Each
+  // branch is the same chain head — `let q = …; q = q.eq(…)` blows up tsc
+  // on this builder's recursive type.
   const baseList = supabase
     .from("expenses")
     .select(
       "id, spent_on, amount, currency, aud_amount, category, deductible, invoice_saved, notes, provider:providers(name)",
     );
-  const filteredList = viewArchived
+  const archivedScopedList = viewArchived
     ? baseList.not("deleted_at", "is", null)
     : baseList.is("deleted_at", null);
+  // Missing-invoice filter is purely additive — covers both manually entered
+  // and auto-generated rows because both share the same invoice_saved flag.
+  const filteredList = showMissingOnly
+    ? archivedScopedList.eq("invoice_saved", false)
+    : archivedScopedList;
   const expensesResult = await filteredList
     .order("spent_on", { ascending: false })
     .order("created_at", { ascending: false })
@@ -169,7 +188,16 @@ export default async function ExpensesPage({
                 View archived
               </Link>
               <Link
-                href={showAnyForm ? "/expenses" : "/expenses?add=1"}
+                href={
+                  showAnyForm
+                    ? // Editing within the missing-invoice filter → return
+                      // to that filter on Cancel. Add cancellation keeps the
+                      // existing /expenses fallback (Add flow unchanged).
+                      editRequested && showMissingOnly
+                      ? "/expenses?invoice=missing"
+                      : "/expenses"
+                    : "/expenses?add=1"
+                }
                 className="inline-flex items-center h-9 px-3 rounded-md text-sm font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors"
               >
                 {showAnyForm ? "Cancel" : "Add expense"}
@@ -178,6 +206,23 @@ export default async function ExpensesPage({
           )}
         </div>
       </div>
+
+      {!viewArchived ? (
+        // Filter tabs — only on the active view. Archived view intentionally
+        // doesn't surface this filter; the user is doing a different task.
+        <div className="mb-5 flex items-center gap-1 flex-wrap">
+          <ExpenseFilterTab
+            href="/expenses"
+            active={!showMissingOnly}
+            label="All"
+          />
+          <ExpenseFilterTab
+            href="/expenses?invoice=missing"
+            active={showMissingOnly}
+            label="Missing invoices"
+          />
+        </div>
+      ) : null}
 
       {editNotFound ? (
         <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -203,6 +248,9 @@ export default async function ExpensesPage({
           pendingLabel="Saving…"
           providers={providers}
           expenseId={editTarget.id}
+          // Preserve filter through Save: hidden return_to_invoice lands the
+          // user back on /expenses?invoice=missing&saved=1.
+          returnToInvoice={showMissingOnly ? "missing" : undefined}
         />
       ) : null}
 
@@ -232,7 +280,9 @@ export default async function ExpensesPage({
               <EmptyRow colSpan={8}>
                 {viewArchived
                   ? "No archived expenses."
-                  : "No expenses yet. Click “Add expense” to create one."}
+                  : showMissingOnly
+                    ? "All invoices are accounted for."
+                    : "No expenses yet. Click “Add expense” to create one."}
               </EmptyRow>
             ) : (
               expenses.map((e) => (
@@ -272,7 +322,11 @@ export default async function ExpensesPage({
                     ) : (
                       <div className="flex items-center gap-3">
                         <Link
-                          href={`/expenses?edit=${e.id}`}
+                          href={
+                            showMissingOnly
+                              ? `/expenses?edit=${e.id}&invoice=missing`
+                              : `/expenses?edit=${e.id}`
+                          }
                           className="text-sm text-muted hover:text-foreground underline-offset-4 hover:underline"
                         >
                           Edit
@@ -288,5 +342,28 @@ export default async function ExpensesPage({
         </DataTable>
       </Card>
     </>
+  );
+}
+
+function ExpenseFilterTab({
+  href,
+  active,
+  label,
+}: {
+  href: string;
+  active: boolean;
+  label: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className={
+        active
+          ? "px-3 py-1.5 rounded-md text-sm bg-slate-100 text-foreground font-medium transition-colors"
+          : "px-3 py-1.5 rounded-md text-sm text-muted hover:bg-slate-50 hover:text-foreground transition-colors"
+      }
+    >
+      {label}
+    </Link>
   );
 }

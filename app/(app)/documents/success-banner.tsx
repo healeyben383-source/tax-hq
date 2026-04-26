@@ -3,13 +3,16 @@
 import { useEffect, useState } from "react";
 
 // Small transient banner that auto-dismisses after 3 seconds AND strips its
-// driving query param from the URL so a refresh doesn't re-show it.
+// driving query param(s) from the URL so a refresh doesn't re-show it.
+// `paramKey` accepts a single name or an array — useful when one banner is
+// driven by a primary param (`saved`) but should also clear a co-flag
+// (`auto_linked`) so the URL settles back to the same place either way.
 export function AutoDismissSuccess({
   message,
   paramKey = "saved",
 }: {
   message: string;
-  paramKey?: string;
+  paramKey?: string | string[];
 }) {
   const [visible, setVisible] = useState(true);
 
@@ -18,16 +21,30 @@ export function AutoDismissSuccess({
     return () => clearTimeout(t);
   }, []);
 
+  // Flatten the keys to a stable string so the dep array is array-shape
+  // independent (otherwise a new array literal each render retriggers).
+  const keysSerialised = Array.isArray(paramKey)
+    ? paramKey.join(",")
+    : paramKey;
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const url = new URL(window.location.href);
-    if (url.searchParams.has(paramKey)) {
-      url.searchParams.delete(paramKey);
+    const keys = keysSerialised.split(",");
+    let mutated = false;
+    for (const k of keys) {
+      if (url.searchParams.has(k)) {
+        url.searchParams.delete(k);
+        mutated = true;
+      }
+    }
+    if (mutated) {
       const cleaned =
-        url.pathname + (url.searchParams.toString() ? `?${url.searchParams}` : "");
+        url.pathname +
+        (url.searchParams.toString() ? `?${url.searchParams}` : "");
       window.history.replaceState({}, "", cleaned);
     }
-  }, [paramKey]);
+  }, [keysSerialised]);
 
   if (!visible) return null;
 

@@ -230,6 +230,19 @@ export function DocumentForm({
           hint="Australian FY start year. e.g. 2025 = FY25-26."
         />
 
+        {/* Optional document amount — persisted on the row; feeds the
+            create-action's auto-matcher and is editable later for audit.
+            Always rendered; blank clears the column on save. */}
+        <Field
+          label="Document amount"
+          name="amount"
+          type="number"
+          step="0.01"
+          min="0"
+          defaultValue={values.amount}
+          hint="Optional — improves auto-matching accuracy."
+        />
+
         <div className="flex items-end gap-6 pb-1">
           <CheckField
             label="Private (hide from future collaborators)"
