@@ -39,8 +39,9 @@ export const initialCreateExpenseState: CreateExpenseState = {
 // Must match the CHECK constraint on public.expenses.category.
 export const expenseCategoryOptions: string[] = [
   "AI tools",
-  "Software",
   "Hosting",
+  "Domains",
+  "Software",
   "Fees",
   "Hardware",
   "Other",

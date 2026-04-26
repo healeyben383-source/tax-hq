@@ -29,6 +29,7 @@ export type ExpenseCategory =
   | "AI tools"
   | "Software"
   | "Hosting"
+  | "Domains"
   | "Fees"
   | "Hardware"
   | "Other";
