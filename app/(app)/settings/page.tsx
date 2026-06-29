@@ -14,24 +14,68 @@ export default function SettingsPage() {
           <CardHeader title="Account" description="Owner of this instance" />
           <CardBody>
             <Row label="Email" value="benh2477@proton.me" />
-            <Row label="Auth" value="Not configured" hint="TODO: add auth provider" />
+            <Row
+              label="Auth"
+              value="Supabase Auth"
+              hint="Email + password sign-in"
+            />
+            <Row
+              label="Access model"
+              value="Owner-scoped (RLS)"
+              hint="Every row scoped to the signed-in owner"
+            />
           </CardBody>
         </Card>
 
         <Card>
           <CardHeader title="Security" description="Protections for sensitive data" />
           <CardBody>
-            <Row label="MFA" value="Not configured" hint="TODO: enforce for secure records" />
-            <Row label="Encryption" value="Not configured" hint="TODO: KMS-backed envelope encryption" />
-            <Row label="Audit log" value="Not configured" hint="TODO: record every decrypt/read" />
+            <Row
+              label="Encryption"
+              value="AES-256-GCM"
+              hint="Secure records encrypted at rest, masked on display"
+            />
+            <Row
+              label="Audit log"
+              value="Reveals logged"
+              hint="Secure-record reveals recorded; broader coverage planned"
+            />
+            <Row
+              label="MFA / re-auth on reveal"
+              value="Deferred"
+              hint="TODO: gate reveals behind a fresh re-auth / MFA challenge"
+            />
+            <Row
+              label="Key rotation / KMS"
+              value="Deferred"
+              hint="TODO: single server-held key today; add KMS + rotation"
+            />
           </CardBody>
         </Card>
 
         <Card>
           <CardHeader title="Data" description="Storage backend" />
           <CardBody>
-            <Row label="Database" value="Mock (in-memory)" hint="TODO: wire Supabase" />
-            <Row label="File storage" value="Not configured" hint="TODO: private bucket for invoices" />
+            <Row
+              label="Database"
+              value="Supabase (Postgres)"
+              hint="Providers, expenses, documents, recurring, checklist, secure records"
+            />
+            <Row
+              label="File storage"
+              value="Private bucket"
+              hint="Document files served via short-lived signed URLs"
+            />
+            <Row
+              label="Exports / reporting"
+              value="Deferred"
+              hint="TODO: not built yet"
+            />
+            <Row
+              label="Email ingest / OCR"
+              value="Deferred"
+              hint="TODO: not built yet"
+            />
           </CardBody>
         </Card>
 

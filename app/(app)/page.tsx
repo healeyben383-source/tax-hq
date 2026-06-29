@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/data-table";
 import { PageHeader } from "@/components/ui/page-header";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { providers } from "@/lib/mock-data";
 import {
   daysUntil,
   formatDate,
@@ -56,6 +55,12 @@ type RecentDocRow = {
   doc_month: number | null;
   doc_year: number | null;
   provider: { name: string } | null;
+};
+
+type QuickProviderRow = {
+  id: string;
+  name: string;
+  category: string;
 };
 
 const recentDocStatusTone: Record<FileStatus, "success" | "warning" | "danger"> =
@@ -232,7 +237,16 @@ export default async function DashboardPage() {
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
 
-  const quickProviders = providers.slice(0, 4);
+  // Quick links: first few providers by name. RLS-scoped; errors degrade to
+  // an empty list which renders the "No providers yet" empty state below.
+  const { data: quickProviderData } = await supabase
+    .from("providers")
+    .select("id, name, category")
+    .is("deleted_at", null)
+    .order("name", { ascending: true })
+    .limit(4)
+    .returns<QuickProviderRow[]>();
+  const quickProviders: QuickProviderRow[] = quickProviderData ?? [];
 
   return (
     <>
@@ -508,16 +522,25 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader title="Quick links" description="Key providers" />
           <CardBody className="flex flex-col gap-1">
-            {quickProviders.map((p) => (
+            {quickProviders.length === 0 ? (
               <Link
-                key={p.id}
                 href="/providers"
-                className="flex items-center justify-between px-2 py-2 rounded-md text-sm hover:bg-slate-50"
+                className="px-2 py-2 rounded-md text-sm text-subtle hover:bg-slate-50"
               >
-                <span className="text-foreground">{p.name}</span>
-                <span className="text-xs text-subtle">{p.category}</span>
+                No providers yet →
               </Link>
-            ))}
+            ) : (
+              quickProviders.map((p) => (
+                <Link
+                  key={p.id}
+                  href="/providers"
+                  className="flex items-center justify-between px-2 py-2 rounded-md text-sm hover:bg-slate-50"
+                >
+                  <span className="text-foreground">{p.name}</span>
+                  <span className="text-xs text-subtle">{p.category}</span>
+                </Link>
+              ))
+            )}
           </CardBody>
         </Card>
       </div>
