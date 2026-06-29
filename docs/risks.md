@@ -21,7 +21,6 @@ Highest impact first.
 | AUD amounts are estimates (placeholder 1.56 FX rate), not real conversions. Treating them as exact figures would be wrong. | Medium | High | Label totals as estimates; replace with live/stored FX rate (`lib/fx.ts`). |
 | Settings page hardcodes "Mock (in-memory) / Not configured" for DB, encryption, audit — all actually wired. Misleads about what's real. | Medium | High | Update `app/(app)/settings/page.tsx` copy to reflect actual state. |
 | Recurring sweep marks auto-created expenses `deductible = true` by default — an assumption, not an eligibility ruling. | Medium | Medium | Make deductibility an explicit choice; never imply ATO eligibility. |
-| Dashboard "Quick links" still reads `lib/mock-data.ts`; the rest of the dashboard is live. | Low | High | Migrate to a Supabase query, then delete the mock module. |
 
 ## Trust / safety watch
 
@@ -42,4 +41,6 @@ finish review and a ShipGuard scan before demo/handover.
 Newest first. One line each: what it was and how it was closed or why it was
 accepted.
 
--
+- (2026-06-23) Dashboard "Quick links" mock data + misleading Settings page copy —
+  closed: quick links now query Supabase, `lib/mock-data.ts` deleted, Settings page
+  reflects actual wired state.

@@ -9,13 +9,13 @@ backlog dump.
 The 1–3 highest-value things, most important first. Each should be a concrete,
 bounded action.
 
-- [ ] Fix the Settings page so it stops misreporting state. `app/(app)/settings/page.tsx`
-      is hardcoded to "Database: Mock (in-memory)", "Encryption: Not configured",
-      "Audit log: Not configured" — all of which are actually wired now. It's copy
-      only (no behaviour), but it misleads about what's real.
-- [ ] Replace the dashboard "Quick links" mock data. `app/(app)/page.tsx` still
-      imports `providers` from `lib/mock-data.ts` (the `quickProviders` slice);
-      everything else on the dashboard is Supabase-backed. Swap it to a real query.
+- [x] Fix the Settings page so it stops misreporting state. Done 2026-06-23 —
+      `app/(app)/settings/page.tsx` now shows Supabase Auth, owner-scoped RLS,
+      Supabase Postgres, private document bucket, AES-256-GCM, and audit-logged
+      reveals, with MFA/rotation/exports/email-ingest labelled "Deferred".
+- [x] Replace the dashboard "Quick links" mock data. Done 2026-06-23 —
+      `app/(app)/page.tsx` now queries providers from Supabase (RLS-scoped, top 4 by
+      name) with a "No providers yet" empty state. `lib/mock-data.ts` deleted.
 - [ ] Confirm the secure-records reveal trust posture is acceptable as-is, or add a
       re-auth/MFA gate. Reveal currently decrypts on a valid session with no second
       factor (deliberately scoped out — see risks.md). Decide before relying on it.
@@ -30,8 +30,8 @@ Worth doing, but not the immediate next step.
 - Replace the placeholder FX rate (`lib/fx.ts`, hard-coded 1.56 USD→AUD) with a real
   source or per-row stored `fx_rate`/`fx_rate_date`, and label AUD totals as
   estimates until then.
-- Remove `lib/mock-data.ts` entirely once the last consumer (dashboard quick links)
-  is migrated.
+- (Done 2026-06-23) `lib/mock-data.ts` removed — last consumer (dashboard quick
+  links) migrated to a Supabase query.
 
 ## Blocked / waiting
 
